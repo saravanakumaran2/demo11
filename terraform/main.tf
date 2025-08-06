@@ -6,18 +6,27 @@ terraform {
     }
   }
 }
-
+########################################
+# Look up the default VPC in the region
+########################################
+data "aws_vpc" "default" {
+  default = true
+}
 provider "aws" {
   region = var.aws_region
 }
 
-data "aws_vpc" "default" {
-  default = true
+data "aws_key_pair" "existing" {
+  key_name = var.key_name
 }
 
 resource "aws_security_group" "node_sg" {
-  name   = "node_sg"
+  name   = "node_sg1"
   vpc_id = data.aws_vpc.default.id
+
+  lifecycle {
+    create_before_destroy = true
+  }
 
   ingress {
     description = "SSH"
@@ -26,6 +35,7 @@ resource "aws_security_group" "node_sg" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
+
   ingress {
     description = "HTTP"
     from_port   = 80
@@ -33,21 +43,18 @@ resource "aws_security_group" "node_sg" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
+
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
-  lifecycle {
-    create_before_destroy = true
-  }
 }
 
 data "aws_ami" "ubuntu" {
   most_recent = true
-  owners      = ["099720109477"]
+  owners      = ["099720109477"] # Canonical
   filter {
     name   = "name"
     values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
@@ -55,22 +62,17 @@ data "aws_ami" "ubuntu" {
 }
 
 resource "aws_instance" "nodejs_app" {
-  ami                         = data.aws_ami.ubuntu.id
-  instance_type               = var.instance_type
-  key_name                    = var.key_name
-  vpc_security_group_ids      = [aws_security_group.node_sg.id]
-  associate_public_ip_address = false
+  ami                    = data.aws_ami.ubuntu.id
+  instance_type          = "t2.micro"
+  key_name               = data.aws_key_pair.existing.key_name
+  vpc_security_group_ids = [aws_security_group.node_sg.id]
 
   tags = {
     Name = "nodejs-app"
   }
 }
 
-resource "aws_eip" "ansible" {
-  instance = aws_instance.nodejs_app.id
-  depends_on = [aws_instance.nodejs_app]
-
-  tags = {
-    Name = "ansible"
-  }
+resource "aws_eip_association" "ansible_attach" {
+  instance_id   = aws_instance.nodejs_app.id
+  allocation_id = "eipalloc-0ae353f17264eefad"  # Replace this!
 }
