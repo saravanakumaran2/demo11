@@ -1,5 +1,3 @@
-aws_region         = "ca-central-1"
-key_name           = "democentralcanada"
-public_key_path    = "/home/you/.ssh/democentralcanda.pub"
-instance_type      = "t2.micro"
-my_ip_cidr         = "YOUR_IP/32"
+aws_region = "ca-central-1"
+key_name   = "democentralcanada"
+public_key = file("~/.ssh/democentralcanada.pub")
