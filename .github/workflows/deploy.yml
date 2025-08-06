@@ -1,8 +1,17 @@
+name: Deploy Node.js App
+
+on:
+  push:
+    branches:
+      - main
+
 jobs:
   terraform_apply:
-    runs-on: [self-hosted, linuxRunner]
+    runs-on: [self-hosted, kinux]
+
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
@@ -27,13 +36,21 @@ jobs:
           TF_VAR_public_key: ${{ secrets.TF_VAR_PUBLIC_KEY }}
           TF_VAR_key_name: "democentralcanada"
 
+      - name: Get Terraform output (public IP)
+        id: get_ip
+        run: |
+          echo "public_ip=$(terraform output -raw public_ip)" >> $GITHUB_OUTPUT
+        working-directory: ./terraform
+
   ansible_deploy:
     needs: terraform_apply
-    runs-on: ubuntu-latest   # Use a fresh runner with Node.js
-    steps:
-      - uses: actions/checkout@v3
+    runs-on: ubuntu-latest
 
-      - name: Install Node.js
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install Node.js (if needed)
         uses: actions/setup-node@v4
         with:
           node-version: '18'
@@ -45,12 +62,17 @@ jobs:
           sudo apt-add-repository --yes --update ppa:ansible/ansible
           sudo apt-get install -y ansible sshpass python3-pip
 
+      - name: Create dynamic Ansible inventory with Terraform IP
+        run: |
+          echo "[nodejs-app]" > ansible/inventory.ini
+          echo "${{ needs.terraform_apply.outputs.public_ip }} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/democentralcanada.pem" >> ansible/inventory.ini
+
       - name: Setup SSH Key and Known Hosts
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/democentralcanada.pem
           chmod 600 ~/.ssh/democentralcanada.pem
-          ssh-keyscan -H 15.223.146.233 >> ~/.ssh/known_hosts
+          ssh-keyscan -H ${{ needs.terraform_apply.outputs.public_ip }} >> ~/.ssh/known_hosts
 
       - name: Run Ansible Playbook
         run: |
