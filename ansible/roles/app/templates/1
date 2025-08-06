@@ -1,0 +1,13 @@
+module.exports = {
+  apps : [{
+    name        : "nodejs-service",
+    script      : "index.js",
+    cwd         : "/opt/nodejs-app",
+    instances   : 1,
+    exec_mode   : "fork",
+    env: {
+      NODE_ENV: "production"
+    }
+  }]
+}
+
