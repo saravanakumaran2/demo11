@@ -1,39 +1,35 @@
 terraform {
   required_providers {
     aws = {
-      source  = "hashicorp/aws"
+      source = "hashicorp/aws"
       version = "~> 5.0"
     }
   }
 }
-########################################
-# Look up the default VPC in the region
-########################################
-data "aws_vpc" "default" {
-  default = true
-}
+
 provider "aws" {
   region = var.aws_region
 }
 
-data "aws_key_pair" "existing" {
-  key_name = var.key_name
+data "aws_vpc" "default" {
+  default = true
+}
+
+resource "aws_key_pair" "deployer" {
+  key_name   = var.key_name
+  public_key = file(var.public_key_path)
 }
 
 resource "aws_security_group" "node_sg" {
   name   = "node_sg"
   vpc_id = data.aws_vpc.default.id
 
-  lifecycle {
-    create_before_destroy = true
-  }
-
   ingress {
     description = "SSH"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = [var.my_ip_cidr]
   }
 
   ingress {
@@ -54,7 +50,7 @@ resource "aws_security_group" "node_sg" {
 
 data "aws_ami" "ubuntu" {
   most_recent = true
-  owners      = ["099720109477"] # Canonical
+  owners      = ["099720109477"]
   filter {
     name   = "name"
     values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
@@ -62,13 +58,21 @@ data "aws_ami" "ubuntu" {
 }
 
 resource "aws_instance" "nodejs_app" {
-  ami                    = data.aws_ami.ubuntu.id
-  instance_type          = "t2.micro"
-  key_name               = data.aws_key_pair.existing.key_name
-  vpc_security_group_ids = [aws_security_group.node_sg.id]
+  ami                          = data.aws_ami.ubuntu.id
+  instance_type                = var.instance_type
+  key_name                     = aws_key_pair.deployer.key_name
+  vpc_security_group_ids       = [aws_security_group.node_sg.id]
+  associate_public_ip_address  = false
 
   tags = {
     Name = "nodejs-app"
   }
 }
 
+resource "aws_eip" "ansible" {
+  instance    = aws_instance.nodejs_app.id
+  depends_on  = [aws_instance.nodejs_app]
+  tags = {
+    Name = "ansible"
+  }
+}
