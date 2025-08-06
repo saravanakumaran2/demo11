@@ -10,8 +10,12 @@ jobs:
     runs-on: [self-hosted, kinux]
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
@@ -36,11 +40,6 @@ jobs:
           TF_VAR_public_key: ${{ secrets.TF_VAR_PUBLIC_KEY }}
           TF_VAR_key_name: "democentralcanada"
 
-      - name: Get Terraform output (public IP)
-        id: get_ip
-        run: |
-          echo "public_ip=$(terraform output -raw public_ip)" >> $GITHUB_OUTPUT
-        working-directory: ./terraform
 
   ansible_deploy:
     needs: terraform_apply
