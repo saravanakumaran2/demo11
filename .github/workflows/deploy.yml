@@ -6,7 +6,7 @@ on:
 
 jobs:
   deploy:
-    runs-on: [self-hosted, worker]
+    runs-on: [self-hosted, kinux]
 
     steps:
       - name: Checkout code
