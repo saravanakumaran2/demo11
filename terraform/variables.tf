@@ -1,22 +1,19 @@
 variable "aws_region" {
-  type        = string
-  description = "AWS region"
-  default     = "ca-central-1"
-}
-
-variable "key_name" {
-  type        = string
-  description = "Name of the AWS key pair"
-  default     = "democentralcanda"
-}
-
-variable "public_key" {
-  type        = string
-  description = "Public key material"
+  default = "ca-central-1"
 }
 
 variable "instance_type" {
-  type        = string
-  description = "EC2 instance type"
-  default     = "t2.micro"
+  default = "t2.micro"
 }
+
+variable "key_name" {
+  description = "Existing EC2 key pair name"
+  type        = string
+}
+
+variable "public_key_path" {
+  description = "Path to the public key file"
+  type        = string
+  default     = ""
+}
+
