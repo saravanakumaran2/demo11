@@ -1,19 +1,13 @@
-variable "aws_region" {
-  default = "ca-central-1"
-}
-
-variable "instance_type" {
-  default = "t2.micro"
+variable "public_key" {
+  description = "Public key content from GitHub Secrets"
+  type        = string
 }
 
 variable "key_name" {
-  description = "Existing EC2 key pair name"
+  description = "Name of the EC2 key pair"
   type        = string
 }
 
-variable "public_key_path" {
-  description = "Path to the public key file"
-  type        = string
-  default     = ""
+variable "aws_region" {
+  default = "ca-central-1"
 }
-
