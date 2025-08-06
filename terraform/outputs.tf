@@ -1,8 +1,9 @@
-output "public_ip" {
-  value = aws_instance.nodejs_app.public_ip
+output "instance_id" {
+  description = "EC2 instance ID"
+  value       = aws_instance.nodejs_app.id
 }
 
-output "ssh_command" {
- value = "ssh -i ~/.ssh/democentralcanada.pem ubuntu@${aws_instance.nodejs_app.public_ip}"
+output "instance_public_ip" {
+  description = "Elastic IP address"
+  value       = aws_eip.ansible.public_ip
 }
-
