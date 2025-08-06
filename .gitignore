@@ -1,9 +1,5 @@
-# Terraform files
 *.tfstate
 *.tfstate.backup
 .terraform/
-.crash.log
-*tfplan
-
-# SSH keys
-*.pem
+terraform.tfvars
+democentralcanda.pem
