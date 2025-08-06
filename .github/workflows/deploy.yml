@@ -1,0 +1,58 @@
+name: Deploy Node.js App
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, worker]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ca-central-1
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.7
+
+      - name: Terraform Init
+        run: terraform init
+        working-directory: ./terraform
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve
+        working-directory: ./terraform
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          TF_VAR_public_key: ${{ secrets.TF_VAR_PUBLIC_KEY }}
+          TF_VAR_key_name: "democentralcanada"
+
+      - name: Install Ansible and dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y software-properties-common
+          sudo apt-add-repository --yes --update ppa:ansible/ansible
+          sudo apt-get install -y ansible sshpass python3-pip
+
+      - name: Add SSH Key and Add Host to Known Hosts
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/democentralcanada.pem
+          chmod 600 ~/.ssh/democentralcanada.pem
+          ssh-keyscan -H 15.223.146.233 >> ~/.ssh/known_hosts  # <-- your existing Elastic IP
+
+      - name: Run Ansible Playbook
+        run: |
+          ansible-playbook ansible/node_service.yml \
+            -i ansible/inventory.ini \
+            --private-key ~/.ssh/democentralcanada.pem
