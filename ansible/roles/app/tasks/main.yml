@@ -1,0 +1,92 @@
+---
+- name: Install prerequisites
+  apt:
+    name:
+      - git
+      - curl
+    update_cache: yes
+
+- name: Install Node.js (LTS)
+  shell: |
+      curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+      apt-get install -y nodejs
+  args:
+    creates: /usr/bin/node
+
+- name: Clone app repo
+  git:
+    repo: https://github.com/SuchithraChandrasekaran/nodejs_service_deployment.git
+    dest: /opt/nodejs-app
+    version: main
+    force: yes
+
+- name: Install npm dependencies
+  npm:
+    path: /opt/nodejs-app
+    production: yes
+
+- name: Copy PM2 ecosystem file
+  template:
+    src: ecosystem.config.js.j2
+    dest: /opt/nodejs-app/ecosystem.config.js
+
+- name: Install pm2 globally
+  npm:
+    name: pm2
+    global: yes
+
+- name: Start or reload the service
+  shell: |
+    pm2 start /opt/nodejs-app/ecosystem.config.js || pm2 reload all
+    pm2 save
+
+- name: Install prerequisites for Docker
+  apt:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg
+      - lsb-release
+    update_cache: yes
+
+- name: Add Docker's official GPG key
+  shell: |
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+  args:
+    creates: /usr/share/keyrings/docker-archive-keyring.gpg
+
+- name: Add Docker APT repository
+  apt_repository:
+    repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu {{ ansible_lsb.codename }} stable"
+    state: present
+    filename: docker
+
+- name: Install Docker Engine
+  apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+    update_cache: yes
+
+- name: Add user to docker group
+  user:
+    name: "{{ ansible_user }}"
+    groups: docker
+    append: yes
+
+- name: Enable and start Docker service
+  systemd:
+    name: docker
+    enabled: yes
+    state: started
+
+- name: Download Docker Compose
+  get_url:
+    url: https://github.com/docker/compose/releases/download/v2.24.2/docker-compose-linux-x86_64
+    dest: /usr/local/bin/docker-compose
+    mode: '0755'
+
+- name: Verify Docker Compose installation
+  command: docker-compose --version
