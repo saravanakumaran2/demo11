@@ -1,80 +1,75 @@
-name: Deploy Node.js App
+name: Deploy Node.js App in staging 
 
 on:
   push:
     branches:
       - main
-
 jobs:
-  terraform_apply:
-    runs-on: [self-hosted, kinux]
-
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Install Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ca-central-1
-
-      - name: Install Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: 1.5.7
-
-      - name: Terraform Init and Apply
-        run: |
-          terraform init
-          terraform apply -auto-approve
-        working-directory: ./terraform
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          TF_VAR_public_key: ${{ secrets.TF_VAR_PUBLIC_KEY }}
-          TF_VAR_key_name: "democentralcanada"
-
-
-  ansible_deploy:
-    needs: terraform_apply
-    runs-on: ubuntu-latest
-
+  AWS:
+    runs-on: [self-hosted, linuxRunner]
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-
-      - name: Install Node.js (if needed)
-        uses: actions/setup-node@v4
+      - name: Setup AWS Credentials
+        uses: ./custom-actions/aws-credentials
         with:
-          node-version: '18'
+          aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws_region: ca-central-1
+          
+  Terraform:
+    runs-on: [self-hosted, linuxRunner]
+    needs: AWS
+    steps:
+      - name: Setup Terraform and Apply Infra
+        uses: ./custom-actions/terraform
+        with:
+          aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          public_key: ${{ secrets.TF_VAR_PUBLIC_KEY }}
+          key_name: "democentralcanada"
+  
+  Ansible:
+    runs-on: [self-hosted, linuxRunner]
+    needs: Terraform
+    steps:
+      - name: Setup and Run Ansible
+        uses: ./custom-actions/ansible
+        with:
+          ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
+          remote_host_ip: "15.156.144.245"
+  
+  Docker:
+    runs-on: [self-hosted, linuxRunner]
+    needs: Ansible
+    steps:          
+      - name: Run Docker Compose
+        uses: ./custom-actions/docker-compose
+        with:
+          ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
+          remote_host_ip: "15.156.144.245"
 
-      - name: Install Ansible and dependencies
+  SeleniumTest:
+     runs-on: [self-hosted, linuxRunner]
+     needs: Docker
+     steps:
+      - name: Run Selenium Tests
+        uses: ./custom-actions/selenium-test
+        with:
+          ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
+          remote_host_ip: "15.156.144.245"
+      - name: Download Test Report from EC2
         run: |
-          sudo apt-get update
-          sudo apt-get install -y software-properties-common
-          sudo apt-add-repository --yes --update ppa:ansible/ansible
-          sudo apt-get install -y ansible sshpass python3-pip
+          mkdir -p mochawesome-report
+          scp -i ~/.ssh/democentralcanada.pem -o StrictHostKeyChecking=no \
+          ubuntu@16.52.62.154:~/test-project/mochawesome-report/mochawesome.html mochawesome-report/
+          
+      - name: Upload Test Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: selenium-test-report
+          path: mochawesome-report/mochawesome.html
+      
 
-      - name: Create dynamic Ansible inventory with Terraform IP
-        run: |
-          echo "[nodejs-app]" > ansible/inventory.ini
-          echo "${{ needs.terraform_apply.outputs.public_ip }} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/democentralcanada.pem" >> ansible/inventory.ini
 
-      - name: Setup SSH Key and Known Hosts
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/democentralcanada.pem
-          chmod 600 ~/.ssh/democentralcanada.pem
-          ssh-keyscan -H ${{ needs.terraform_apply.outputs.public_ip }} >> ~/.ssh/known_hosts
-
-      - name: Run Ansible Playbook
-        run: |
-          ansible-playbook ansible/node_service.yml \
-            -i ansible/inventory.ini \
-            --private-key ~/.ssh/democentralcanada.pem
+          
