@@ -1,0 +1,35 @@
+name: Install and Run Ansible
+description: Install Ansible and run playbook
+
+inputs:
+  ssh_private_key:
+    required: true
+  remote_host_ip:
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install Ansible and dependencies
+      shell: bash
+      run: |
+        sudo su
+        sudo apt-get update
+        sudo apt-get install -y software-properties-common
+        sudo apt-add-repository --yes --update ppa:ansible/ansible
+        sudo apt-get install -y ansible sshpass python3-pip
+
+    - name: Add SSH Key and Host
+      shell: bash
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ inputs.ssh_private_key }}" | tr -d '\r' > ~/.ssh/democentralcanada.pem
+        chmod 600 ~/.ssh/democentralcanada.pem
+        ssh-keyscan -H ${{ inputs.remote_host_ip }} >> ~/.ssh/known_hosts
+
+    - name: Run Ansible Playbook
+      shell: bash
+      run: |
+        ansible-playbook ansible/playbook.yaml \
+          -i ansible/inventory.ini \
+          --private-key ~/.ssh/democentralcanada.pem
