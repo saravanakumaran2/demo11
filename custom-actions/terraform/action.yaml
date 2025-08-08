@@ -1,0 +1,35 @@
+name: Setup and Apply Terraform
+description: Install Terraform and apply infrastructure
+
+inputs:
+  aws_access_key_id:
+    required: true
+  aws_secret_access_key:
+    required: true
+  public_key:
+    required: true
+  key_name:
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: 1.5.7
+
+    - name: Terraform Init
+      shell: bash
+      run: terraform init
+      working-directory: ./terraform
+
+    - name: Terraform Apply
+      shell: bash
+      run: terraform apply -auto-approve
+      working-directory: ./terraform
+      env:
+        AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key_id }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_access_key }}
+        TF_VAR_public_key: ${{ inputs.public_key }}
+        TF_VAR_key_name: ${{ inputs.key_name }}
