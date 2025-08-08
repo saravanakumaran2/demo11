@@ -1,9 +1,9 @@
-name: Deploy Node.js App in staging 
+name: Deploy Node.js App in prod
 
 on:
   push:
     branches:
-      - main
+      - prod
 jobs:
   AWS:
     runs-on: [self-hosted, linuxRunner]
@@ -28,7 +28,7 @@ jobs:
           aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           public_key: ${{ secrets.TF_VAR_PUBLIC_KEY }}
           key_name: "democentralcanada"
-  
+          
   Ansible:
     runs-on: [self-hosted, linuxRunner]
     needs: Terraform
@@ -37,8 +37,8 @@ jobs:
         uses: ./custom-actions/ansible
         with:
           ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
-          remote_host_ip: "15.156.144.245"
-  
+          remote_host_ip: "16.52.62.154"
+          
   Docker:
     runs-on: [self-hosted, linuxRunner]
     needs: Ansible
@@ -47,29 +47,5 @@ jobs:
         uses: ./custom-actions/docker-compose
         with:
           ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
-          remote_host_ip: "15.156.144.245"
+          remote_host_ip: "16.52.62.154"
 
-  SeleniumTest:
-     runs-on: [self-hosted, linuxRunner]
-     needs: Docker
-     steps:
-      - name: Run Selenium Tests
-        uses: ./custom-actions/selenium-test
-        with:
-          ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
-          remote_host_ip: "15.156.144.245"
-      - name: Download Test Report from EC2
-        run: |
-          mkdir -p mochawesome-report
-          scp -i ~/.ssh/democentralcanada.pem -o StrictHostKeyChecking=no \
-          ubuntu@16.52.62.154:~/test-project/mochawesome-report/mochawesome.html mochawesome-report/
-          
-      - name: Upload Test Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: selenium-test-report
-          path: mochawesome-report/mochawesome.html
-      
-
-
-          
