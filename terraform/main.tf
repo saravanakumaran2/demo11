@@ -18,8 +18,8 @@ data "aws_key_pair" "existing" {
   key_name = var.key_name
 }
 
-resource "aws_security_group" "staging_node" {
-  name   = "staging_node"
+resource "aws_security_group" "develop_node" {
+  name   = "develop_node"
   vpc_id = data.aws_vpc.default.id
 
   lifecycle {
@@ -30,7 +30,7 @@ ingress {
   description = "Allow all traffic"
   from_port   = 0
   to_port     = 0
-  protocol    = "-1"       
+  protocol    = "-1"      
   cidr_blocks = ["0.0.0.0/0"]
 }
 
@@ -51,18 +51,18 @@ data "aws_ami" "ubuntu" {
   }
 }
 
-resource "aws_instance" "staging_node" {
+resource "aws_instance" "develop_node" {
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = "t2.micro"
   key_name               = data.aws_key_pair.existing.key_name
-  vpc_security_group_ids = [aws_security_group.staging_node.id]
+  vpc_security_group_ids = [aws_security_group.develop_node.id]
 
   tags = {
-    Name = "staging_node"
+    Name = "develop_node"
   }
 }
 
-resource "aws_eip_association" "staging_attach" {
-  instance_id   = aws_instance.staging_node.id
-  allocation_id = "eipalloc-0d5dac96c0b55b36f" 
+resource "aws_eip_association" "develop_attach" {
+  instance_id   = aws_instance.develop_node.id
+  allocation_id = "eipalloc-0ae353f17264eefad"  
 }
