@@ -1,0 +1,38 @@
+name: Run Docker Compose
+description: Runs docker-compose on the remote EC2 instance
+
+inputs:
+  ssh_private_key:
+    required: true
+  remote_host_ip:
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Add SSH Key and Host
+      shell: bash
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ inputs.ssh_private_key }}" | tr -d '\r' > ~/.ssh/democentralcanada.pem
+        chmod 600 ~/.ssh/democentralcanada.pem
+        ssh-keyscan -H ${{ inputs.remote_host_ip }} >> ~/.ssh/known_hosts
+
+    - name: Checkout GitHub Repository
+      shell: bash
+      run: |
+        ssh -i ~/.ssh/democentralcanada.pem -o StrictHostKeyChecking=no ubuntu@${{ inputs.remote_host_ip }} << 'EOF'
+          cd ~
+          git clone https://github.com/Jinitusinu/nodejs_Actions_terraform_ansible.git node-app
+          cd node-app
+        EOF
+
+    - name: Run Docker Compose
+      shell: bash
+      run: |
+        ssh -i ~/.ssh/democentralcanada.pem -o StrictHostKeyChecking=no ubuntu@${{ inputs.remote_host_ip }} << 'EOF'
+          cd ~/node-app
+          docker-compose down
+          docker-compose pull
+          docker-compose up -d
+        EOF
