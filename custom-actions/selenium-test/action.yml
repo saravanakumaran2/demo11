@@ -1,0 +1,67 @@
+name: Run Selenium Tests
+description: Executes Selenium test with Mocha and generates Mochawesome report
+
+inputs:
+  ssh_private_key:
+    required: true
+  remote_host_ip:
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Add SSH key and known hosts
+      shell: bash
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ inputs.ssh_private_key }}" > ~/.ssh/selenium.pem
+        chmod 600 ~/.ssh/selenium.pem
+        ssh-keyscan -H ${{ inputs.remote_host_ip }} >> ~/.ssh/known_hosts
+
+    - name: Run Selenium Test on Remote EC2
+      shell: bash
+      run: |
+        ssh -i ~/.ssh/selenium.pem -o StrictHostKeyChecking=no ubuntu@${{ inputs.remote_host_ip }} << 'EOF'
+          set -e
+
+          # Start Selenium container if not already running
+          if [ "\$(sudo docker ps -q -f name=selenium-standalone)" = "" ]; then
+            if [ "\$(sudo docker ps -aq -f status=exited -f name=selenium-standalone)" != "" ]; then
+              echo "Starting existing selenium-standalone container..."
+              sudo docker start selenium-standalone
+            else
+              echo "Running new selenium-standalone container..."
+              sudo docker run -d -p 4444:4444 --name selenium-standalone selenium/standalone-chrome
+            fi
+          else
+            echo "Selenium container already running."
+          fi
+
+          # Ensure test file exists
+          if [ -f ~/test-project/test.mjs ]; then
+            echo "test.mjs found in test-project"
+          else
+            echo "test.mjs not found in test-project"
+            exit 1
+          fi
+
+          # Run the test
+          cd ~/test-project
+          npx mocha test.mjs --reporter mochawesome
+
+          # Archive results for download
+          mkdir -p mochawesome-artifacts
+          cp mochawesome-report/mochawesome.html mochawesome-artifacts/
+          cp mochawesome-report/mochawesome.json mochawesome-artifacts/
+        EOF
+
+    - name: Copy test results from EC2
+      shell: bash
+      run: |
+        scp -i ~/.ssh/selenium.pem -o StrictHostKeyChecking=no -r ubuntu@${{ inputs.remote_host_ip }}:~/test-project/mochawesome-artifacts ./mochawesome-artifacts
+
+    - name: Upload mochawesome artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: mochawesome-report
+        path: ./mochawesome-artifacts
