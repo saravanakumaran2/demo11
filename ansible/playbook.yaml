@@ -1,61 +1,15 @@
 ---
-- name: Setup Node.js testing environment with Docker, Chrome, and Selenium
+- name: Install Docker and Docker Compose on Ubuntu
   hosts: all
   become: yes
 
-  pre_tasks:
-    - name: Update apt cache
-      apt:
-        update_cache: yes
-
-    - name: Install prerequisites
-      apt:
-        name:
-          - curl
-          - gnupg
-          - unzip
-          - ca-certificates
-          - software-properties-common
-          - lsb-release
-        state: present
-
-    - name: Add Google Chrome GPG key
-      apt_key:
-        url: https://dl.google.com/linux/linux_signing_key.pub
-        state: present
-
-    - name: Add Google Chrome repository
-      apt_repository:
-        repo: 'deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main'
-        state: present
-        filename: google-chrome
-
   tasks:
-    # Remove outdated Node.js if present
-    - name: Remove old Node.js
-      apt:
-        name: nodejs
-        state: absent
-
-    # Install Node.js 20.x via NodeSource
-    - name: Add Node.js 20.x repository
-      shell: |
-        curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-      args:
-        executable: /bin/bash
-
-    - name: Install Node.js and npm
-      apt:
-        name: nodejs
-        state: present
-
-    # Docker Installation
-    - name: Update apt package index again
+    - name: Update apt package index
       apt:
         update_cache: yes
         cache_valid_time: 3600
 
-    - name: Install packages for Docker repository setup
+    - name: Install required packages for Docker repo
       apt:
         name:
           - ca-certificates
@@ -65,17 +19,17 @@
         state: present
 
     - name: Add Docker's official GPG key
-      apt_key:
+      ansible.builtin.apt_key:
         url: https://download.docker.com/linux/ubuntu/gpg
         state: present
 
-    - name: Add Docker repository
+    - name: Add Docker apt repository
       apt_repository:
-        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release | lower }} stable"
+        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
         state: present
         filename: docker
 
-    - name: Update apt cache after adding Docker repo
+    - name: Update apt again after adding Docker repo
       apt:
         update_cache: yes
 
@@ -87,13 +41,13 @@
           - containerd.io
         state: present
 
-    - name: Ensure Docker is started and enabled
+    - name: Ensure Docker service is started and enabled
       systemd:
         name: docker
         state: started
         enabled: yes
 
-    - name: Install Docker Compose
+    - name: Download Docker Compose binary
       get_url:
         url: https://github.com/docker/compose/releases/download/v2.20.2/docker-compose-linux-x86_64
         dest: /usr/local/bin/docker-compose
@@ -101,74 +55,10 @@
 
     - name: Verify Docker Compose installation
       command: docker-compose --version
-      register: docker_compose_version
-      changed_when: false
 
-    - name: Add current user to Docker group
+    # Optional: Add user (e.g., ubuntu) to docker group to run docker without sudo
+    - name: Add user to docker group
       user:
-        name: "{{ ansible_user_id }}"
+        name: "{{ ansible_user }}"
         groups: docker
         append: yes
-
-    - name: Install latest Google Chrome
-      apt:
-        name: google-chrome-stable
-        state: present
-      environment:
-        DEBIAN_FRONTEND: noninteractive
-
-    # Download ChromeDriver
-    - name: Download ChromeDriver
-      get_url:
-        url: https://chromedriver.storage.googleapis.com/100.0.4896.20/chromedriver_linux64.zip
-        dest: /tmp/chromedriver.zip
-        mode: '0644'
-
-    - name: Unzip ChromeDriver
-      unarchive:
-        src: /tmp/chromedriver.zip
-        dest: /usr/local/bin/
-        remote_src: yes
-
-    - name: Ensure test project directory exists
-      file:
-        path: /home/ubuntu/test-project
-        state: directory
-        owner: ubuntu
-        group: ubuntu
-        mode: '0755'
-
-    - name: Initialize npm project
-      command: npm init -y
-      args:
-        chdir: /home/ubuntu/test-project
-        creates: /home/ubuntu/test-project/package.json
-
-    - name: Install npm test dependencies
-      command: npm install --save-dev mocha chai selenium-webdriver mochawesome
-      args:
-        chdir: /home/ubuntu/test-project
-
-    - name: Verify Mocha installation
-      command: npx mocha --version
-      args:
-        chdir: /home/ubuntu/test-project
-      register: mocha_version
-      changed_when: false
-
-    - name: Run Selenium Standalone Chrome container
-      community.docker.docker_container:
-        name: selenium-standalone-chrome
-        image: selenium/standalone-chrome:latest
-        state: started
-        restart_policy: always
-        published_ports:
-          - "4444:4444"
-
-    - name: Wait for Selenium Hub to be ready
-      wait_for:
-        host: localhost
-        port: 4444
-        delay: 10
-        timeout: 60
-        state: started
